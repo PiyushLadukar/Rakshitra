@@ -91,10 +91,13 @@ if __name__ == "__main__":
 
     df.columns = df.columns.str.lower().str.replace(" ", "_")
 
-    result = detect_crime_anomalies(df, city="Pune")
+    result = detect_crime_anomalies(df, city="Nagpur")
 
     print("Total anomalies:", result["total_anomalies"])
 
-    print("\nSample alerts:")
+    print("\nCrime Alerts:")
     for a in result["anomalies"][:5]:
         print(f"🚨 {a['time_slot']} spike in {a['city']} on {a['date']}")
+
+ 
+        
