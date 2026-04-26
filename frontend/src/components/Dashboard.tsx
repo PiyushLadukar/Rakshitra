@@ -1,123 +1,199 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
+import React, { useEffect, useMemo, useCallback } from "react";
+import { motion } from "framer-motion";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid
-} from "recharts";
-import { AlertTriangle, Database } from "lucide-react";
-import StatCard from "./statcard";
-import Loader from "./Loader";
+  Database, AlertTriangle, TrendingUp, Shield
+} from "lucide-react";
 
-type DataType = {
-  city: string;
-  crime: string;
-  date: string;
-  count: number;
-  anomaly: number;
-};
+import Sidebar from "./layouts/Sidebar";
+import Topbar from "./layouts/Topbar";
+import KPICard from "./ui/KPICard";
+import FilterBar from "./filters/FilterBar";
+import CrimeTrendLine from "./charts/CrimeTrendLine";
+import CityBarChart from "./charts/CityBarChart";
+import CategoryPieChart from "./charts/CategoryPieChart";
+import HeatmapChart from "./charts/HeatmapChart";
+import CrimeTable from "./table/CrimeTable";
+import { SkeletonKPI, SkeletonChart } from "./ui/Loader";
+
+import { useDashboardData } from "../hooks/useDashboardData";
+import { Filters } from "../types";
+import { getMostCommonCrime, getPeakDays } from "../utils/dataHelpers";
+
+const EMPTY_FILTERS: Filters = { city: "", crime: "", dateFrom: "", dateTo: "" };
 
 export default function Dashboard() {
+  const { response, loading, error, fetchData, fetchMeta } = useDashboardData();
 
-  const [data, setData] = useState<DataType[]>([]);
-  const [city, setCity] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const fetchData = async () => {
-    setLoading(true);
-
-    let url = "http://127.0.0.1:5000/dashboard";
-
-    if (city) {
-      url += `?city=${city}`;
-    }
-
-    const res = await axios.get(url);
-    setData(res.data.data);
-
-    setLoading(false);
-  };
-
+  // Initial load
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchMeta();
+    fetchData(EMPTY_FILTERS);
+  }, [fetchData, fetchMeta]);
 
-  const anomalyCount = data.filter(d => d.anomaly === 1).length;
+  const handleApply = useCallback((f: Filters) => {
+    fetchData(f);
+  }, [fetchData]);
+
+  const { data, total_records, total_anomalies, cities = [], crime_types = [] } = response;
+
+  const mostCommon    = useMemo(() => getMostCommonCrime(data), [data]);
+  const peakDays      = useMemo(() => getPeakDays(data, 3), [data]);
+  const anomalyRate   = total_records > 0
+    ? ((total_anomalies / total_records) * 100).toFixed(1) + "%"
+    : "0%";
+
+  const lastUpdated = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   return (
-    <div className="container">
+    <div className="app-shell">
+      <Sidebar anomalyCount={total_anomalies} />
 
-      <h1 className="header">Rakshitra</h1>
-
-      <div className="card">
-        <input
-          placeholder="Enter city"
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-        />
-        <button onClick={fetchData}>Search</button>
-      </div>
-
-      <div className="grid">
-        <StatCard
-          title="Total Records"
-          value={data.length}
-          icon={<Database size={20} />}
+      <div className="main-content">
+        <Topbar
+          title="Crime Intelligence Dashboard"
+          subtitle="India — Real-time anomaly detection & analysis"
+          loading={loading}
+          onRefresh={() => fetchData(EMPTY_FILTERS)}
+          lastUpdated={lastUpdated}
         />
 
-        <StatCard
-          title="Anomalies"
-          value={anomalyCount}
-          icon={<AlertTriangle size={20} />}
-        />
-      </div>
+        <div className="page-body">
 
-      {loading ? (
-        <Loader />
-      ) : (
-        <>
-          <div className="card">
-            <h3>Crime Trend</h3>
+          {/* ── Error Banner ───────────────────────────── */}
+          {error && (
+            <div style={{
+              background: "var(--red-soft)", border: "1px solid var(--red-border)",
+              borderRadius: "var(--radius-md)", padding: "14px 18px",
+              color: "var(--red-text)", fontSize: 14, fontWeight: 600,
+              display: "flex", alignItems: "center", gap: 10
+            }}>
+              <AlertTriangle size={16} />
+              {error} — make sure the Flask API is running on port 5000.
+            </div>
+          )}
 
-            <LineChart width={900} height={300} data={data}>
-              <CartesianGrid stroke="#ddd" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="count"
-                stroke="#4f46e5"
-                strokeWidth={3}
+          {/* ── Filters ────────────────────────────────── */}
+          <FilterBar
+            onApply={handleApply}
+            loading={loading}
+            cities={cities.length ? cities : [...new Set(data.map(d => d.city))].sort()}
+          />
+
+          {/* ── KPI Cards ──────────────────────────────── */}
+          {loading ? <SkeletonKPI /> : (
+            <div className="kpi-grid">
+              <KPICard
+                index={0}
+                title="Total Records"
+                value={total_records}
+                icon={<Database size={18} />}
+                accent="accent-orange"
+                sub={`${data.length} grouped incidents`}
               />
-            </LineChart>
+              <KPICard
+                index={1}
+                title="Total Anomalies"
+                value={total_anomalies}
+                icon={<AlertTriangle size={18} />}
+                accent="accent-red"
+                trend={{ value: anomalyRate, dir: total_anomalies > 0 ? "up" : "neutral" }}
+                sub="Isolation Forest detection"
+              />
+              <KPICard
+                index={2}
+                title="Most Common Crime"
+                value={mostCommon}
+                icon={<TrendingUp size={18} />}
+                accent="accent-amber"
+                sub="By total incident count"
+              />
+              <KPICard
+                index={3}
+                title="Cities Analysed"
+                value={[...new Set(data.map(d => d.city))].length}
+                icon={<Shield size={18} />}
+                accent="accent-green"
+                sub={peakDays[0] ? `Peak: ${peakDays[0].date}` : "No peaks detected"}
+              />
+            </div>
+          )}
+
+          {/* ── Trend Line (full width) ─────────────────── */}
+          <motion.div
+            className="chart-card"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.3 }}
+          >
+            <div className="chart-header">
+              <div>
+                <div className="chart-title">Crime Trend Over Time</div>
+                <div className="chart-subtitle">Multi-category comparison by date</div>
+              </div>
+            </div>
+            {loading ? <SkeletonChart /> : <CrimeTrendLine data={data} />}
+          </motion.div>
+
+          {/* ── Bar + Pie ──────────────────────────────── */}
+          <div className="chart-grid-2">
+            <motion.div
+              className="chart-card"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.38 }}
+            >
+              <div className="chart-header">
+                <div>
+                  <div className="chart-title">Crime by City</div>
+                  <div className="chart-subtitle">Top 10 cities by total incidents</div>
+                </div>
+              </div>
+              {loading ? <SkeletonChart height={240} /> : <CityBarChart data={data} />}
+            </motion.div>
+
+            <motion.div
+              className="chart-card"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.44 }}
+            >
+              <div className="chart-header">
+                <div>
+                  <div className="chart-title">Category Distribution</div>
+                  <div className="chart-subtitle">Share of each crime type</div>
+                </div>
+              </div>
+              {loading ? <SkeletonChart height={240} /> : <CategoryPieChart data={data} />}
+            </motion.div>
           </div>
 
-          <div className="card">
-            <h3>Anomaly Detection</h3>
+          {/* ── Heatmap ────────────────────────────────── */}
+          <motion.div
+            className="chart-card"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.5 }}
+          >
+            <div className="chart-header">
+              <div>
+                <div className="chart-title">City × Crime Heatmap</div>
+                <div className="chart-subtitle">Intensity of each crime type per city</div>
+              </div>
+            </div>
+            {loading ? <SkeletonChart height={200} /> : <HeatmapChart data={data} />}
+          </motion.div>
 
-            <table>
-              <thead>
-                <tr>
-                  <th>City</th>
-                  <th>Crime</th>
-                  <th>Date</th>
-                  <th>Count</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((d, i) => (
-                  <tr key={i} className={d.anomaly === 1 ? "anomaly" : ""}>
-                    <td>{d.city}</td>
-                    <td>{d.crime}</td>
-                    <td>{d.date}</td>
-                    <td>{d.count}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+          {/* ── Table ──────────────────────────────────── */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.56 }}
+          >
+            <CrimeTable data={data} />
+          </motion.div>
 
+        </div>
+      </div>
     </div>
   );
 }
