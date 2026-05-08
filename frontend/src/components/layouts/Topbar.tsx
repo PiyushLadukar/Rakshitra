@@ -1,43 +1,29 @@
 import React from "react";
-import { RefreshCw, Wifi } from "lucide-react";
+import { Bell, Search } from "lucide-react";
 
 type Props = {
   title: string;
-  subtitle: string;
-  loading: boolean;
-  onRefresh: () => void;
-  lastUpdated: string;
+  subtitle?: string;
 };
 
-export default function Topbar({ title, subtitle, loading, onRefresh, lastUpdated }: Props) {
+export default function Topbar({ title, subtitle }: Props) {
   return (
     <header className="topbar">
       <div style={{ flex: 1 }}>
-        <div className="topbar-title">{title}</div>
-        <div className="topbar-subtitle">{subtitle}</div>
+        <div className="topbar-title">
+          <span className="topbar-hi">{title.slice(0, 4)}</span>
+          <span className="topbar-de">{title.slice(4)}</span>
+        </div>
+        {subtitle && <div className="topbar-crumb">{subtitle}</div>}
       </div>
 
-      <div className="topbar-actions">
-        {lastUpdated && (
-          <div className="topbar-chip">
-            <Wifi size={11} />
-            Updated {lastUpdated}
-          </div>
-        )}
-
-        <div className="topbar-chip live">
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
-          Live
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="topbar-chip">
+          <Search size={12} />
+          <span style={{ color: "var(--text-faint)", fontSize: 12 }}>Search…</span>
         </div>
-
-        <button
-          className="btn-secondary"
-          onClick={onRefresh}
-          disabled={loading}
-          style={{ padding: "7px 13px" }}
-        >
-          <RefreshCw size={14} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-          Refresh
+        <button className="btn-ghost" style={{ padding: "7px 10px" }}>
+          <Bell size={15} />
         </button>
       </div>
     </header>

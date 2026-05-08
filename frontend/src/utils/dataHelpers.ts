@@ -1,98 +1,83 @@
 import { CrimeRecord } from "../types";
 
-export const CRIME_COLORS: Record<string, string> = {
-  "Assault":    "#F97316",
-  "Theft":      "#FB923C",
-  "Cyber Crime":"#FBBF24",
-  "Homicide":   "#EF4444",
-  "Rape":       "#DC2626",
-  "Kidnapping": "#F59E0B",
-  "Extortion":  "#D97706",
-  "Vandalism":  "#A78BFA",
-  "Other":      "#94A3B8",
-};
-
-export const CRIME_TYPES = [
-  "Assault", "Theft", "Cyber Crime", "Homicide",
-  "Rape", "Kidnapping", "Extortion", "Vandalism", "Other"
-];
-
-export const CHART_PALETTE = [
-  "#F97316","#FBBF24","#EF4444","#22C55E",
-  "#A78BFA","#38BDF8","#FB7185","#34D399","#F472B6"
-];
-
-/** Aggregate count by date for line chart */
-export function aggregateByDate(data: CrimeRecord[]) {
-  const map: Record<string, number> = {};
-  data.forEach(d => {
-    map[d.date] = (map[d.date] || 0) + d.count;
-  });
-  return Object.entries(map)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, count]) => ({ date, count }));
+export function getMostCommonCrime(data: CrimeRecord[]): string {
+  if (!data.length) return "—";
+  const freq: Record<string, number> = {};
+  data.forEach(d => { freq[d.crime] = (freq[d.crime] || 0) + d.count; });
+  return Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
 }
 
-/** Multi-line: one series per crime type */
-export function aggregateByDateAndCrime(data: CrimeRecord[]) {
+export function getPeakDays(data: CrimeRecord[], n = 3): CrimeRecord[] {
+  return [...data].sort((a, b) => b.count - a.count).slice(0, n);
+}
+
+export function groupByCity(data: CrimeRecord[]): { city: string; total: number }[] {
+  const map: Record<string, number> = {};
+  data.forEach(d => { map[d.city] = (map[d.city] || 0) + d.count; });
+  return Object.entries(map)
+    .map(([city, total]) => ({ city, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
+}
+
+export function groupByCrime(data: CrimeRecord[]): { crime: string; total: number }[] {
+  const map: Record<string, number> = {};
+  data.forEach(d => {
+    const key = d.crime === "Other" ? "Other" : d.crime;
+    map[key] = (map[key] || 0) + d.count;
+  });
+  return Object.entries(map)
+    .map(([crime, total]) => ({ crime, total }))
+    .sort((a, b) => b.total - a.total);
+}
+
+export function groupByDate(data: CrimeRecord[]): { date: string; [crime: string]: any }[] {
   const map: Record<string, Record<string, number>> = {};
   data.forEach(d => {
     if (!map[d.date]) map[d.date] = {};
     map[d.date][d.crime] = (map[d.date][d.crime] || 0) + d.count;
   });
   return Object.entries(map)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, crimes]) => ({ date, ...crimes }));
+    .map(([date, crimes]) => ({ date, ...crimes }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-/** Bar chart: crime count per city */
-export function aggregateByCity(data: CrimeRecord[]) {
+export function groupByMonth(data: CrimeRecord[]): { month: string; total: number }[] {
   const map: Record<string, number> = {};
-  data.forEach(d => { map[d.city] = (map[d.city] || 0) + d.count; });
-  return Object.entries(map)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10)
-    .map(([city, count]) => ({ city, count }));
-}
-
-/** Pie chart: crime category distribution */
-export function aggregateByCrime(data: CrimeRecord[]) {
-  const map: Record<string, number> = {};
-  data.forEach(d => { map[d.crime] = (map[d.crime] || 0) + d.count; });
-  return Object.entries(map)
-    .sort(([, a], [, b]) => b - a)
-    .map(([name, value]) => ({ name, value, color: CRIME_COLORS[name] || "#94A3B8" }));
-}
-
-/** Heatmap: city vs crime */
-export function buildHeatmap(data: CrimeRecord[]) {
-  const cities = [...new Set(data.map(d => d.city))].slice(0, 10);
-  const crimes = [...new Set(data.map(d => d.crime))];
-  const map: Record<string, Record<string, number>> = {};
   data.forEach(d => {
-    if (!map[d.city]) map[d.city] = {};
-    map[d.city][d.crime] = (map[d.city][d.crime] || 0) + d.count;
+    const month = d.date.slice(0, 7);
+    map[month] = (map[month] || 0) + d.count;
   });
-  return { cities, crimes, map };
+  return Object.entries(map)
+    .map(([month, total]) => ({ month, total }))
+    .sort((a, b) => a.month.localeCompare(b.month));
 }
 
-/** Peak crime days (anomalies sorted by count) */
-export function getPeakDays(data: CrimeRecord[], top = 5) {
-  return [...data]
-    .filter(d => d.anomaly === 1)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, top);
+export function getHeatmapData(data: CrimeRecord[]) {
+  const cities = [...new Set(data.map(d => d.city))].slice(0, 8);
+  const crimes = [...new Set(data.map(d => d.crime))].filter(c => c !== "Other").slice(0, 7);
+
+  const cells: { city: string; crime: string; value: number }[] = [];
+  cities.forEach(city => {
+    crimes.forEach(crime => {
+      const total = data.filter(d => d.city === city && d.crime === crime)
+        .reduce((s, d) => s + d.count, 0);
+      if (total > 0) cells.push({ city, crime, value: total });
+    });
+  });
+  return { cities, crimes, cells };
 }
 
-/** Most common crime */
-export function getMostCommonCrime(data: CrimeRecord[]): string {
-  const agg = aggregateByCrime(data);
-  return agg[0]?.name ?? "—";
+export function getWeeklyPattern(data: CrimeRecord[]): { day: string; total: number }[] {
+  const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const map: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  data.forEach(d => {
+    const dow = new Date(d.date).getDay();
+    if (!isNaN(dow)) map[dow] = (map[dow] || 0) + d.count;
+  });
+  return DAYS.map((day, i) => ({ day, total: map[i] }));
 }
 
-/** Format large numbers */
-export function formatNum(n: number): string {
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
-  if (n >= 1_000)     return (n / 1_000).toFixed(1) + "K";
-  return String(n);
+export function uniqueCities(data: CrimeRecord[]): string[] {
+  return [...new Set(data.map(d => d.city))].sort();
 }

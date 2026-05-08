@@ -1,73 +1,61 @@
 import React, { useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { CrimeRecord } from "../../types";
-import { aggregateByCrime } from "../../utils/dataHelpers";
+import { groupByCrime } from "../../utils/dataHelpers";
+
+const COLORS = ["#0EA5E9","#7C3AED","#10B981","#F59E0B","#EF4444","#F43F5E","#06B6D4","#8B5CF6"];
 
 type Props = { data: CrimeRecord[] };
 
-const RADIAN = Math.PI / 180;
-const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-  if (percent < 0.05) return null;
-  const r = innerRadius + (outerRadius - innerRadius) * 0.5;
-  const x = cx + r * Math.cos(-midAngle * RADIAN);
-  const y = cy + r * Math.sin(-midAngle * RADIAN);
-  return (
-    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central"
-      style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--font-body)" }}>
-      {`${(percent * 100).toFixed(0)}%`}
-    </text>
-  );
-};
-
 export default function CategoryPieChart({ data }: Props) {
-  const chartData = useMemo(() => aggregateByCrime(data), [data]);
+  const chartData = useMemo(() => {
+    const grouped = groupByCrime(data);
+    const total = grouped.reduce((s, d) => s + d.total, 0);
+    // collapse small slices into "Other" if < 2%
+    const big = grouped.filter(d => d.crime !== "Other" && d.total / total >= 0.02);
+    const smallTotal = grouped.filter(d => d.crime === "Other" || d.total / total < 0.02)
+      .reduce((s, d) => s + d.total, 0);
+    if (smallTotal > 0) big.push({ crime: "Other", total: smallTotal });
+    return { items: big, total };
+  }, [data]);
 
-  if (!chartData.length) {
-    return (
-      <div className="empty-state">
-        <div className="empty-icon">🥧</div>
-        <div className="empty-title">No category data</div>
-      </div>
-    );
-  }
+  if (!chartData.items.length) return <div className="empty"><div className="empty-ico">🍩</div><div className="empty-t">No data</div></div>;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <ResponsiveContainer width="100%" height={200}>
+    <div>
+      <ResponsiveContainer width="100%" height={190}>
         <PieChart>
           <Pie
-            data={chartData}
+            data={chartData.items}
+            dataKey="total"
+            nameKey="crime"
             cx="50%" cy="50%"
             innerRadius={55}
-            outerRadius={90}
+            outerRadius={80}
             paddingAngle={3}
-            dataKey="value"
-            labelLine={false}
-            label={renderLabel}
+            stroke="none"
           >
-            {chartData.map((entry, i) => (
-              <Cell key={i} fill={entry.color} stroke="white" strokeWidth={2} />
+            {chartData.items.map((_, i) => (
+              <Cell key={i} fill={COLORS[i % COLORS.length]} />
             ))}
           </Pie>
           <Tooltip
-            contentStyle={{
-              background: "var(--ink-900)", border: "none",
-              borderRadius: 10, fontSize: 12, fontFamily: "var(--font-body)"
-            }}
-            labelStyle={{ color: "var(--cream-200)" }}
+            formatter={(val: number) => [`${val} (${((val / chartData.total) * 100).toFixed(1)}%)`, ""]}
+            contentStyle={{ background: "var(--navy-900)", border: "none", borderRadius: 10, padding: "10px 14px" }}
+            labelStyle={{ color: "#7DD3FC", fontSize: 11, fontWeight: 600 }}
+            itemStyle={{ color: "#E2E8F0", fontSize: 12 }}
           />
         </PieChart>
       </ResponsiveContainer>
 
-      {/* Legend */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {chartData.slice(0, 6).map(entry => (
-          <div key={entry.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <div style={{ width: 10, height: 10, borderRadius: "50%", background: entry.color, flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: "var(--ink-500)", fontWeight: 500 }}>{entry.name}</span>
+      <div className="donut-legend">
+        {chartData.items.slice(0, 6).map((d, i) => (
+          <div key={d.crime} className="donut-legend-item">
+            <div className="donut-legend-left">
+              <div className="donut-dot" style={{ background: COLORS[i % COLORS.length] }} />
+              <span className="donut-name">{d.crime}</span>
             </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-700)" }}>{entry.value}</span>
+            <span className="donut-val">{((d.total / chartData.total) * 100).toFixed(1)}%</span>
           </div>
         ))}
       </div>

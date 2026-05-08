@@ -46,16 +46,9 @@ export default function Dashboard() {
 
   return (
     <div className="app-shell">
-      <Sidebar anomalyCount={total_anomalies} />
 
       <div className="main-content">
-        <Topbar
-          title="Crime Intelligence Dashboard"
-          subtitle="India — Real-time anomaly detection & analysis"
-          loading={loading}
-          onRefresh={() => fetchData(EMPTY_FILTERS)}
-          lastUpdated={lastUpdated}
-        />
+        
 
         <div className="page-body">
 

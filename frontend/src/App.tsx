@@ -1,8 +1,14 @@
+import React, { useState } from "react";
 import Dashboard from "./components/Dashboard";
+import Sidebar from "./components/layouts/Sidebar";
 import "./styles/global.css";
 
-function App() {
-  return <Dashboard />;
-}
+export default function App() {
+  const [activeView, setActiveView] = useState("dashboard");
 
-export default App;
+  return (
+    <div className="app-shell">
+      <Dashboard />
+    </div>
+  );
+}

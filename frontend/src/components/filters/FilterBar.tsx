@@ -1,52 +1,41 @@
 import React, { useState } from "react";
 import { Search, X, SlidersHorizontal } from "lucide-react";
 import { Filters } from "../../types";
-import { CRIME_TYPES } from "../../utils/dataHelpers";
 
 type Props = {
   onApply: (f: Filters) => void;
   loading: boolean;
   cities: string[];
+  crimeTypes?: string[];
 };
 
 const EMPTY: Filters = { city: "", crime: "", dateFrom: "", dateTo: "" };
 
-export default function FilterBar({ onApply, loading, cities }: Props) {
-  const [f, setF] = useState<Filters>(EMPTY);
+export default function FilterBar({ onApply, loading, cities, crimeTypes = [] }: Props) {
+  const [filters, setFilters] = useState<Filters>(EMPTY);
 
   const set = (key: keyof Filters, val: string) =>
-    setF(prev => ({ ...prev, [key]: val }));
+    setFilters(prev => ({ ...prev, [key]: val }));
 
-  const activeTags: { key: keyof Filters; label: string }[] = [];
-  if (f.city)     activeTags.push({ key: "city",     label: `City: ${f.city}` });
-  if (f.crime)    activeTags.push({ key: "crime",    label: `Crime: ${f.crime}` });
-  if (f.dateFrom) activeTags.push({ key: "dateFrom", label: `From: ${f.dateFrom}` });
-  if (f.dateTo)   activeTags.push({ key: "dateTo",   label: `To: ${f.dateTo}` });
-
-  const removeTag = (key: keyof Filters) => {
-    const next = { ...f, [key]: "" };
-    setF(next);
-    onApply(next);
-  };
-
-  const handleApply = () => onApply(f);
-
-  const handleReset = () => {
-    setF(EMPTY);
+  const reset = () => {
+    setFilters(EMPTY);
     onApply(EMPTY);
   };
+
+  const activeTags = Object.entries(filters).filter(([, v]) => v !== "");
+
+  const CRIMES = crimeTypes.length ? crimeTypes : [
+    "Assault", "Theft", "Cyber Crime", "Homicide", "Rape",
+    "Kidnapping", "Extortion", "Vandalism", "Other"
+  ];
 
   return (
     <div className="filter-bar">
       {/* City */}
-      <div className="filter-group" style={{ minWidth: 160 }}>
+      <div className="filter-group">
         <label className="filter-label">City</label>
         <div className="filter-select-wrap">
-          <select
-            className="filter-select"
-            value={f.city}
-            onChange={e => set("city", e.target.value)}
-          >
+          <select className="filter-select" value={filters.city} onChange={e => set("city", e.target.value)}>
             <option value="">All Cities</option>
             {cities.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -54,62 +43,46 @@ export default function FilterBar({ onApply, loading, cities }: Props) {
       </div>
 
       {/* Crime Type */}
-      <div className="filter-group" style={{ minWidth: 160 }}>
+      <div className="filter-group">
         <label className="filter-label">Crime Type</label>
         <div className="filter-select-wrap">
-          <select
-            className="filter-select"
-            value={f.crime}
-            onChange={e => set("crime", e.target.value)}
-          >
+          <select className="filter-select" value={filters.crime} onChange={e => set("crime", e.target.value)}>
             <option value="">All Types</option>
-            {CRIME_TYPES.map(c => <option key={c} value={c}>{c}</option>)}
+            {CRIMES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
       </div>
 
-      {/* Date Range */}
-      <div className="filter-group" style={{ minWidth: 260 }}>
+      {/* Date range */}
+      <div className="filter-group" style={{ minWidth: 200 }}>
         <label className="filter-label">Date Range</label>
-        <div className="date-range-group">
-          <input
-            type="date"
-            className="filter-input"
-            value={f.dateFrom}
-            onChange={e => set("dateFrom", e.target.value)}
-          />
-          <span className="date-separator">→</span>
-          <input
-            type="date"
-            className="filter-input"
-            value={f.dateTo}
-            onChange={e => set("dateTo", e.target.value)}
-          />
+        <div className="date-range-wrap">
+          <input type="date" className="filter-input" value={filters.dateFrom} onChange={e => set("dateFrom", e.target.value)} style={{ flex: 1 }} />
+          <span className="date-sep">→</span>
+          <input type="date" className="filter-input" value={filters.dateTo} onChange={e => set("dateTo", e.target.value)} style={{ flex: 1 }} />
         </div>
       </div>
 
       {/* Actions */}
       <div className="filter-actions">
-        <button className="btn-primary" onClick={handleApply} disabled={loading}>
-          <Search size={14} />
+        <button className="btn-primary" onClick={() => onApply(filters)} disabled={loading}>
+          <SlidersHorizontal size={14} />
           {loading ? "Loading…" : "Apply"}
         </button>
         {activeTags.length > 0 && (
-          <button className="btn-secondary" onClick={handleReset}>
-            <X size={14} />
-            Reset
+          <button className="btn-ghost" onClick={reset}>
+            <X size={13} /> Reset
           </button>
         )}
       </div>
 
-      {/* Active Filter Tags */}
+      {/* Active tags */}
       {activeTags.length > 0 && (
-        <div className="active-filters">
-          <SlidersHorizontal size={13} style={{ color: "var(--ink-400)", marginTop: 2 }} />
-          {activeTags.map(tag => (
-            <span key={tag.key} className="filter-tag">
-              {tag.label}
-              <button onClick={() => removeTag(tag.key)}>×</button>
+        <div className="active-tags">
+          {activeTags.map(([k, v]) => (
+            <span key={k} className="tag">
+              <span>{k}: <strong>{v}</strong></span>
+              <button onClick={() => { set(k as keyof Filters, ""); }}>×</button>
             </span>
           ))}
         </div>

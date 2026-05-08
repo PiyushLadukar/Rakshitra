@@ -1,95 +1,103 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { CrimeRecord } from "../../types";
-import { buildHeatmap } from "../../utils/dataHelpers";
+import { getHeatmapData } from "../../utils/dataHelpers";
 
 type Props = { data: CrimeRecord[] };
 
-function heatColor(value: number, max: number) {
-  if (max === 0) return "var(--cream-200)";
-  const t = value / max;
-  if (t === 0) return "var(--cream-100)";
-  if (t < 0.25) return "rgba(253,186,116,0.4)";
-  if (t < 0.5)  return "rgba(249,115,22,0.5)";
-  if (t < 0.75) return "rgba(234,88,12,0.7)";
-  return "rgba(194,65,12,0.9)";
+function lerp(t: number, a: string, b: string) {
+  // simple teal gradient by t (0..1)
+  const r = Math.round(14 + t * (7 - 14));
+  const g = Math.round(165 + t * (62 - 165));
+  const bl = Math.round(233 + t * (237 - 233));
+  return `rgba(${r},${g},${bl},${0.12 + t * 0.75})`;
 }
 
 export default function HeatmapChart({ data }: Props) {
-  const { cities, crimes, map } = useMemo(() => buildHeatmap(data), [data]);
-  const [tooltip, setTooltip] = useState<{ city: string; crime: string; count: number } | null>(null);
+  const { cities, crimes, cells } = useMemo(() => getHeatmapData(data), [data]);
 
-  if (!cities.length) {
-    return (
-      <div className="empty-state">
-        <div className="empty-title">No heatmap data</div>
-      </div>
-    );
-  }
+  if (!cells.length) return (
+    <div className="empty"><div className="empty-ico">🔥</div><div className="empty-t">No heatmap data</div></div>
+  );
 
-  const maxVal = Math.max(...cities.flatMap(c => crimes.map(cr => map[c]?.[cr] || 0)));
+  const maxVal = Math.max(...cells.map(c => c.value));
+
+  const CELL_W = 72;
+  const CELL_H = 34;
+  const LABEL_W = 90;
+  const HEADER_H = 50;
+
+  const svgW = LABEL_W + crimes.length * CELL_W + 8;
+  const svgH = HEADER_H + cities.length * CELL_H + 8;
 
   return (
     <div style={{ overflowX: "auto" }}>
-      {/* Column headers (crimes) */}
-      <div style={{ display: "grid", gridTemplateColumns: `100px repeat(${crimes.length}, 1fr)`, gap: 3, marginBottom: 3 }}>
-        <div />
-        {crimes.map(cr => (
-          <div key={cr} style={{
-            fontSize: 10, fontWeight: 700, color: "var(--ink-400)",
-            textAlign: "center", transform: "rotate(-35deg)", transformOrigin: "bottom left",
-            whiteSpace: "nowrap", height: 50, display: "flex", alignItems: "flex-end", paddingBottom: 4
-          }}>
-            {cr}
-          </div>
+      <svg width={svgW} height={svgH} style={{ display: "block" }}>
+        {/* Crime headers */}
+        {crimes.map((crime, ci) => (
+          <text
+            key={crime}
+            x={LABEL_W + ci * CELL_W + CELL_W / 2}
+            y={HEADER_H - 8}
+            textAnchor="middle"
+            fontSize={10}
+            fontWeight={600}
+            fill="var(--text-muted)"
+            style={{ fontFamily: "var(--font-body)" }}
+          >
+            {crime.length > 10 ? crime.slice(0, 9) + "…" : crime}
+          </text>
         ))}
-      </div>
 
-      {/* Rows (cities) */}
-      {cities.map(city => (
-        <div key={city} style={{ display: "grid", gridTemplateColumns: `100px repeat(${crimes.length}, 1fr)`, gap: 3, marginBottom: 3 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-500)", display: "flex", alignItems: "center", paddingRight: 8 }}>
-            {city}
-          </div>
-          {crimes.map(crime => {
-            const count = map[city]?.[crime] || 0;
-            return (
-              <div
-                key={crime}
-                className="heatmap-cell"
-                style={{
-                  height: 28,
-                  background: heatColor(count, maxVal),
-                  border: "1px solid rgba(255,255,255,0.6)",
-                  position: "relative"
-                }}
-                title={`${city} / ${crime}: ${count}`}
-                onMouseEnter={() => setTooltip({ city, crime, count })}
-                onMouseLeave={() => setTooltip(null)}
-              />
-            );
-          })}
-        </div>
-      ))}
-
-      {/* Scale */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
-        <span style={{ fontSize: 10, color: "var(--ink-400)" }}>Low</span>
-        {["rgba(253,186,116,0.3)","rgba(249,115,22,0.5)","rgba(234,88,12,0.7)","rgba(194,65,12,0.9)"].map((c, i) => (
-          <div key={i} style={{ width: 24, height: 14, background: c, borderRadius: 3 }} />
+        {/* City labels + cells */}
+        {cities.map((city, ri) => (
+          <g key={city}>
+            <text
+              x={LABEL_W - 8}
+              y={HEADER_H + ri * CELL_H + CELL_H / 2 + 4}
+              textAnchor="end"
+              fontSize={11}
+              fontWeight={500}
+              fill="var(--text-secondary)"
+              style={{ fontFamily: "var(--font-body)" }}
+            >
+              {city}
+            </text>
+            {crimes.map((crime, ci) => {
+              const cell = cells.find(c => c.city === city && c.crime === crime);
+              const val = cell?.value ?? 0;
+              const t = maxVal > 0 ? val / maxVal : 0;
+              return (
+                <g key={crime}>
+                  <rect
+                    x={LABEL_W + ci * CELL_W + 2}
+                    y={HEADER_H + ri * CELL_H + 2}
+                    width={CELL_W - 4}
+                    height={CELL_H - 4}
+                    rx={6}
+                    fill={val > 0 ? lerp(t, "", "") : "var(--bg)"}
+                    stroke="var(--border)"
+                    strokeWidth={0.5}
+                    style={{ cursor: "pointer", transition: "transform 0.15s" }}
+                  />
+                  {val > 0 && (
+                    <text
+                      x={LABEL_W + ci * CELL_W + CELL_W / 2}
+                      y={HEADER_H + ri * CELL_H + CELL_H / 2 + 4}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fontWeight={700}
+                      fill={t > 0.5 ? "white" : "var(--navy-900)"}
+                      style={{ fontFamily: "var(--font-mono)", pointerEvents: "none" }}
+                    >
+                      {val}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+          </g>
         ))}
-        <span style={{ fontSize: 10, color: "var(--ink-400)" }}>High</span>
-      </div>
-
-      {/* Hover tooltip */}
-      {tooltip && (
-        <div style={{
-          marginTop: 8, padding: "6px 12px",
-          background: "var(--ink-900)", color: "var(--cream-100)",
-          borderRadius: 8, fontSize: 12, display: "inline-block"
-        }}>
-          <b>{tooltip.city}</b> — {tooltip.crime}: <b>{tooltip.count}</b> incidents
-        </div>
-      )}
+      </svg>
     </div>
   );
 }
